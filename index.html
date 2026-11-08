@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Haftalık Özel Ders Programı</title>
+<!-- Uygulama (PWA) ayarları: ana ekrana eklenince tam ekran uygulama gibi açılır -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4f46e5">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Ders Programı">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f3f5fa; color: #1f2937;
+  }
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 24px; background: #fff; border-bottom: 1px solid #e5e7eb;
+    position: sticky; top: 0; z-index: 20;
+  }
+  header h1 { margin: 0; font-size: 22px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  button, .btn {
+    font: inherit; font-size: 14px; padding: 8px 14px; border-radius: 8px; cursor: pointer;
+    border: 1px solid #d1d5db; background: #fff; color: #1f2937; transition: background .15s;
+  }
+  button:hover, .btn:hover { background: #f3f4f6; }
+  button.primary { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+  button.primary:hover { background: #4338ca; }
+  button.danger { color: #dc2626; border-color: #fecaca; }
+  button.danger:hover { background: #fef2f2; }
+
+  /* Hafta gezinme çubuğu */
+  .weekbar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 16px 24px 0;
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 10px 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  .weekbar .nav { font-size: 18px; padding: 6px 14px; }
+  .week-title { font-size: 18px; font-weight: 700; min-width: 230px; text-align: center; }
+  .week-title small { display: block; font-size: 12px; font-weight: 500; color: #6b7280; }
+  .week-title.is-current small { color: #4f46e5; }
+  .weekbar input[type=date] { font: inherit; font-size: 14px; padding: 7px 8px; border: 1px solid #d1d5db; border-radius: 8px; }
+  .weekbar .spacer { flex: 1; }
+
+  .banner {
+    margin: 12px 24px 0; padding: 12px 16px; border-radius: 12px; background: #eef2ff; color: #3730a3;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 14px;
+  }
+  .banner[hidden] { display: none; }
+  .hint { margin: 12px 24px 0; color: #6b7280; font-size: 13px; }
+
+  main { display: flex; gap: 20px; padding: 14px 24px 32px; align-items: flex-start; }
+  .schedule-wrap {
+    flex: 1; min-width: 0; overflow-x: auto; background: #fff; border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06); border: 1px solid #e5e7eb;
+  }
+  .grid { display: grid; column-gap: 1px; row-gap: 0; background: #e5e7eb; min-width: 820px; user-select: none; }
+  .grid > div { background: #fff; border-top: 1px solid #e5e7eb; }
+  .grid > div.half { border-top: 1px dashed #eef0f4; }
+  .corner, .day-head {
+    position: sticky; top: 0; z-index: 5; padding: 8px 6px; text-align: center;
+    background: #f9fafb !important; font-weight: 600;
+  }
+  .day-head .date { display: block; font-size: 13px; font-weight: 500; color: #374151; }
+  .day-head small { display: block; font-weight: 400; color: #6b7280; font-size: 11px; margin-top: 2px; }
+  .day-head.today { background: #4f46e5 !important; color: #fff; }
+  .day-head.today .date, .day-head.today small { color: #e0e7ff; }
+  .time {
+    display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+    font-size: 13px; font-weight: 600; color: #374151; background: #f9fafb !important; padding: 6px 0 4px;
+  }
+  .time small { font-weight: 400; color: #9ca3af; font-size: 11px; }
+
+  .cell.empty { cursor: pointer; position: relative; }
+  .cell.empty.past { background: #fafafa !important; }
+  .cell.empty.today-col { background: #fafaff !important; }
+  .cell.empty:hover::after {
+    content: "+ Ekle"; position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; color: #9ca3af; font-size: 13px;
+  }
+  .cell.empty.selecting { background: #c7d2fe !important; }
+  .cell.empty.selecting::after { content: "" !important; }
+
+  .lesson-cell { padding: 3px; }
+  .lesson {
+    position: relative; height: 100%; border-radius: 8px; border-left: 4px solid; padding: 5px 8px;
+    cursor: pointer; overflow: hidden; transition: opacity .2s, transform .1s;
+  }
+  .lesson:hover { transform: scale(1.01); box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+  .lesson.dim { opacity: .25; }
+  .lesson.cancelled { opacity: .55; background-image: repeating-linear-gradient(135deg, transparent 0 8px, rgba(255,255,255,.6) 8px 12px); }
+  .lesson.cancelled .l-name { text-decoration: line-through; }
+  .l-name {
+    font-weight: 700; font-size: 14px; line-height: 1.25; word-break: break-word; overflow-wrap: break-word;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    padding-right: 18px; margin-bottom: 2px;
+  }
+  .l-time { font-size: 12px; color: #4b5563; }
+  .l-note { font-size: 12px; color: #374151; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .l-badge {
+    display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 10px;
+    background: rgba(255,255,255,.75); margin-left: 4px;
+  }
+  .l-status { position: absolute; top: 4px; right: 5px; font-size: 13px; }
+  .lesson:hover .l-status { display: none; }
+  .lesson.short { display: flex; align-items: center; gap: 6px; padding: 2px 6px; }
+  .lesson.short .l-name {
+    font-size: 13px; padding-right: 0; flex-shrink: 1; min-width: 0; display: block;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 0;
+  }
+  .lesson.short .l-time { font-size: 11px; white-space: nowrap; }
+  .lesson.short .l-note, .lesson.short .l-badge { display: none; }
+  .lesson.short .l-status { top: 50%; transform: translateY(-50%); }
+  .lesson.short .l-tools { top: 50%; transform: translateY(-50%); }
+  .l-tools {
+    position: absolute; top: 3px; right: 3px; display: none; gap: 2px;
+    background: rgba(255, 255, 255, 0.9); padding: 2px; border-radius: 6px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.15); z-index: 2;
+  }
+  .lesson:hover .l-tools { display: flex; }
+  .l-tools button {
+    width: 20px; height: 20px; padding: 0; font-size: 12px; line-height: 1; border-radius: 4px;
+    background: #fff; border: 1px solid #d1d5db;
+  }
+
+  aside {
+    width: 290px; flex-shrink: 0; background: #fff; border-radius: 14px; border: 1px solid #e5e7eb;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06); padding: 16px; position: sticky; top: 90px;
+  }
+  aside h2 { margin: 0 0 4px; font-size: 17px; }
+  .totals { color: #6b7280; font-size: 13px; margin-bottom: 12px; line-height: 1.5; }
+  .students { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow-y: auto; }
+  .students li { padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
+  .students li:hover { background: #f9fafb; }
+  .students li.active { border-color: #4f46e5; background: #eef2ff; }
+  .s-top { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; border: 2px solid; }
+  .s-count { margin-left: auto; font-weight: 400; font-size: 12px; color: #6b7280; white-space: nowrap; }
+  .s-slots { font-size: 12px; color: #6b7280; margin: 4px 0 0 20px; line-height: 1.5; }
+  .empty-msg { color: #9ca3af; font-size: 14px; }
+  .warn { margin-top: 10px; font-size: 12px; color: #b45309; background: #fffbeb; padding: 8px; border-radius: 8px; }
+
+  .overlay {
+    position: fixed; inset: 0; background: rgba(17,24,39,.45); display: flex;
+    align-items: center; justify-content: center; z-index: 50; padding: 16px;
+  }
+  .overlay[hidden] { display: none; }
+  .modal {
+    background: #fff; border-radius: 14px; padding: 22px; width: 100%; max-width: 460px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.25); display: flex; flex-direction: column; gap: 12px;
+  }
+  .modal h2 { margin: 0; font-size: 19px; }
+  .modal p { margin: 0; font-size: 14px; color: #4b5563; }
+  .modal label, .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; color: #374151; }
+  .modal input, .modal select {
+    font: inherit; font-weight: 400; font-size: 15px; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px;
+  }
+  .modal input:focus, .modal select:focus { outline: 2px solid #a5b4fc; border-color: #6366f1; }
+  .modal label.check { flex-direction: row; align-items: center; gap: 8px; font-weight: 400; }
+  .row { display: flex; gap: 10px; }
+  .row > label { flex: 1; min-width: 0; }
+  .range { margin: -4px 0 0 !important; font-size: 13px !important; color: #4f46e5 !important; font-weight: 600; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+  .swatch {
+    width: 28px; height: 28px; border-radius: 50%; border: 3px solid; cursor: pointer; padding: 0;
+    font-size: 11px; font-weight: 700; color: #374151;
+  }
+  .swatch.selected { outline: 3px solid #1f2937; outline-offset: 2px; }
+  .seg { display: flex; gap: 6px; }
+  .seg button { flex: 1; padding: 7px 6px; font-size: 13px; }
+  .seg button.on { background: #4f46e5; border-color: #4f46e5; color: #fff; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 6px; }
+  .spacer { flex: 1; }
+
+  @media (max-width: 900px) {
+    main { flex-direction: column; }
+    aside { width: 100%; position: static; }
+  }
+  @media print {
+    header .actions, .hint, .l-tools, .overlay, .banner, .weekbar button, .weekbar input { display: none !important; }
+    header { position: static; border: none; }
+    .weekbar { border: none; box-shadow: none; margin-top: 0; }
+    main { padding: 0; }
+    .schedule-wrap, aside { box-shadow: none; }
+    aside { position: static; }
+    .lesson.dim { opacity: 1; }
+    body { background: #fff; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📚 Özel Ders Programı</h1>
+  <div class="actions">
+    <button id="btnCopyWeeks">📋 Sonraki haftalara kopyala</button>
+    <button id="btnSettings">⚙️ Ayarlar</button>
+    <button id="btnPrint">🖨️ Yazdır</button>
+    <button id="btnExport">⬇️ Yedekle</button>
+    <label class="btn">⬆️ Yedekten Yükle<input type="file" id="fileImport" accept=".json,application/json" hidden></label>
+    <button id="btnClear" class="danger">🗑️ Haftayı temizle</button>
+  </div>
+</header>
+
+<div class="weekbar">
+  <button class="nav" id="btnPrev" title="Önceki hafta (←)">‹</button>
+  <div class="week-title" id="weekTitle"></div>
+  <button class="nav" id="btnNext" title="Sonraki hafta (→)">›</button>
+  <button id="btnToday">📅 Bu hafta</button>
+  <span class="spacer"></span>
+  <label style="font-size:13px;color:#6b7280">Tarihe git:
+    <input type="date" id="jumpDate">
+  </label>
+</div>
+
+<div class="banner" id="emptyBanner" hidden>
+  <span id="bannerText">Bu haftada henüz ders yok.</span>
+  <button class="primary" id="btnCopyPrev">⤵️ Önceki haftanın programını getir</button>
+</div>
+
+<p class="hint">
+  💡 Boş saate tıklayıp öğrenci adı yazın (varsayılan 1 saat). Program <b>yarım saatlik</b> dilimlerden oluşur: 16:00–17:30 gibi dersler için
+  boş dilimler üzerinde aşağı sürükleyin, dersteki <b>＋ / －</b> ile 30'ar dakika uzatıp kısaltın ya da pencereden başlangıç ve süreyi seçin.
+  <b>✓</b> ile dersi “yapıldı” olarak işaretleyin. Haftalar arasında ‹ › veya klavyede ← → ile gezinin.
+</p>
+
+<main>
+  <div class="schedule-wrap"><div id="grid" class="grid"></div></div>
+  <aside id="summary"></aside>
+</main>
+
+<!-- Ders ekleme / düzenleme -->
+<div class="overlay" id="lessonModal" hidden>
+  <form class="modal" id="lessonForm" autocomplete="off">
+    <h2 id="modalTitle">Yeni Ders</h2>
+    <label>Öğrenci adı
+      <input id="fName" list="studentList" required placeholder="örn. Ayşe Yılmaz">
+    </label>
+    <datalist id="studentList"></datalist>
+    <label>Ders / Not <input id="fNote" placeholder="örn. Matematik – 8. sınıf"></label>
+    <div class="row">
+      <label>Gün <select id="fDay"></select></label>
+      <label>Başlangıç <select id="fHour"></select></label>
+      <label>Süre <select id="fDur"></select></label>
+    </div>
+    <p class="range" id="fRange"></p>
+    <div class="field">Durum
+      <div class="seg" id="fStatus">
+        <button type="button" data-s="planned">🕒 Planlandı</button>
+        <button type="button" data-s="done">✅ Yapıldı</button>
+        <button type="button" data-s="cancelled">❌ İptal</button>
+      </div>
+    </div>
+    <div class="field">Renk <div id="fColors" class="swatches"></div></div>
+    <div class="modal-actions">
+      <button type="button" id="btnDelete" class="danger">Sil</button>
+      <span class="spacer"></span>
+      <button type="button" class="cancel">İptal</button>
+      <button type="submit" class="primary">Kaydet</button>
+    </div>
+  </form>
+</div>
+
+<!-- Sonraki haftalara kopyala -->
+<div class="overlay" id="copyModal" hidden>
+  <form class="modal" id="copyForm">
+    <h2>📋 Programı ileri kopyala</h2>
+    <p id="copyInfo"></p>
+    <label>Kaç hafta ileriye?
+      <input type="number" id="cWeeks" min="1" max="52" value="4">
+    </label>
+    <label class="check"><input type="checkbox" id="cOverwrite"> Dolu haftaların üzerine yaz (işaretsizse dolu haftalar atlanır)</label>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button type="button" class="cancel">İptal</button>
+      <button type="submit" class="primary">Kopyala</button>
+    </div>
+  </form>
+</div>
+
+<!-- Ayarlar -->
+<div class="overlay" id="settingsModal" hidden>
+  <form class="modal" id="settingsForm">
+    <h2>Ayarlar</h2>
+    <div class="row">
+      <label>Gün başlangıcı <select id="sStart"></select></label>
+      <label>Gün bitişi <select id="sEnd"></select></label>
+    </div>
+    <label class="check"><input type="checkbox" id="sWeekend"> Cumartesi ve Pazar'ı göster</label>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button type="button" class="cancel">İptal</button>
+      <button type="submit" class="primary">Kaydet</button>
+    </div>
+  </form>
+</div>
+
+<script>
+const DAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+const DAYS_SHORT = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+const MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+const PALETTE = [
+  ['#dbeafe', '#3b82f6'], ['#dcfce7', '#22c55e'], ['#fef3c7', '#f59e0b'], ['#fce7f3', '#ec4899'],
+  ['#ede9fe', '#8b5cf6'], ['#ffedd5', '#f97316'], ['#cffafe', '#06b6d4'], ['#fee2e2', '#ef4444'],
+  ['#e0e7ff', '#6366f1'], ['#ecfccb', '#84cc16']
+];
+const STATUS_ICON = { planned: '', done: '✅', cancelled: '❌' };
+const STORE = 'ozelDersProgrami.v1';
+const DATA_VERSION = 2;   // v2: 30 dakikalık dilimler
+const MAX_DUR = 12;       // en fazla 12 dilim = 6 saat
+
+const $ = s => document.querySelector(s);
+const pad = n => String(n).padStart(2, '0');
+// Zaman birimi "dilim"dir: 1 dilim = 30 dakika, dilim 32 = 16:00, dilim 33 = 16:30
+const fmt = s => `${pad(Math.floor(s / 2))}:${s % 2 ? '30' : '00'}`;
+const fmtHours = n => `${String(n / 2).replace('.', ',')} saat`;
+const fmtDur = n => n === 1 ? '30 dk' : fmtHours(n);
+const norm = s => s.trim().toLocaleLowerCase('tr');
+const parseKey = k => k.split('-').map(Number);
+const firstSlot = () => state.settings.start * 2;
+const lastSlot = () => state.settings.end * 2;   // hariç
+
+/* ---------- Tarih yardımcıları (yerel saat) ---------- */
+function mondayOf(date) {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  d.setDate(d.getDate() - (d.getDay() + 6) % 7);
+  return d;
+}
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const dateKey = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const keyToDate = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
+const shortDate = d => `${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)}`;
+
+/* ---------- Durum ---------- */
+let currentMonday = mondayOf(new Date());
+let state = load() || { v: DATA_VERSION, settings: { start: 8, end: 22, weekend: true }, weeks: {} };
+let highlight = null;
+let sel = null;
+let lastDownMouse = false;
+let editKey = null, modalColor = null, modalStatus = 'planned';
+
+// Eski verileri yeni biçime dönüştürür (tek haftalık / saatlik → haftalık / yarım saatlik)
+function migrate(s) {
+  if (!s || !s.settings) return null;
+  if (!s.weeks) {
+    s.weeks = {};
+    if (s.lessons && Object.keys(s.lessons).length) s.weeks[dateKey(mondayOf(new Date()))] = s.lessons;
+    delete s.lessons;
+  }
+  if ((s.v || 1) < 2) {
+    for (const [wk, w] of Object.entries(s.weeks)) {
+      const nw = {};
+      for (const [k, l] of Object.entries(w)) {
+        const [d, h] = parseKey(k);
+        nw[`${d}-${h * 2}`] = { ...l, dur: l.dur * 2 };
+      }
+      s.weeks[wk] = nw;
+    }
+  }
+  s.v = DATA_VERSION;
+  return s;
+}
+function load() {
+  try { return migrate(JSON.parse(localStorage.getItem(STORE))); } catch (e) { return null; }
+}
+function persist() {
+  for (const k of Object.keys(state.weeks)) if (!Object.keys(state.weeks[k]).length) delete state.weeks[k];
+  localStorage.setItem(STORE, JSON.stringify(state));
+}
+
+const weekKey = () => dateKey(currentMonday);
+const lessons = () => state.weeks[weekKey()] || {};
+const ensureWeek = () => (state.weeks[weekKey()] ??= {});
+
+/* ---------- Yardımcılar ---------- */
+const dayCount = () => state.settings.weekend ? 7 : 5;
+function hash(str) { let h = 0; for (const c of str) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; }
+function colorIdx(l) { return l.color ?? hash(norm(l.name)) % PALETTE.length; }
+function isVisible(d, s) { return d < dayCount() && s >= firstSlot() && s < lastSlot(); }
+function findConflicts(day, slot, dur, ignoreKey) {
+  return Object.entries(lessons()).filter(([k, l]) => {
+    if (k === ignoreKey) return false;
+    const [d, s] = parseKey(k);
+    return d === day && s < slot + dur && slot < s + l.dur;
+  }).map(([k]) => k);
+}
+// Tek tıklamada varsayılan süre: yer varsa 1 saat, yoksa 30 dk
+function defaultDur(day, slot) {
+  return slot + 2 <= lastSlot() && !findConflicts(day, slot, 2).length ? 2 : 1;
+}
+function prevFilledWeek() {
+  const keys = Object.keys(state.weeks).filter(k => k < weekKey() && Object.keys(state.weeks[k]).length).sort();
+  return keys.length ? keys[keys.length - 1] : null;
+}
+function cloneLessons(src) {
+  const out = {};
+  for (const [k, l] of Object.entries(src)) out[k] = { ...l, status: 'planned' };
+  return out;
+}
+
+/* ---------- Ders işlemleri ---------- */
+function saveLesson(origKey, data) {
+  if (data.slot + data.dur > lastSlot()) { alert('Ders, günün bitiş saatini aşıyor.'); return false; }
+  const conflicts = findConflicts(data.day, data.slot, data.dur, origKey);
+  const week = ensureWeek();
+  if (conflicts.length) {
+    const names = conflicts.map(k => `${week[k].name} (${fmt(parseKey(k)[1])})`).join(', ');
+    if (!confirm(`Bu saatlerde başka ders var: ${names}\n\nÜzerine yazılsın mı?`)) return false;
+    conflicts.forEach(k => delete week[k]);
+  }
+  if (origKey) delete week[origKey];
+  week[`${data.day}-${data.slot}`] = {
+    name: data.name, note: data.note, dur: data.dur, color: data.color, status: data.status || 'planned'
+  };
+  persist(); render();
+  return true;
+}
+function extend(key) {
+  const [d, s] = parseKey(key), l = lessons()[key];
+  if (l.dur >= MAX_DUR) return;
+  saveLesson(key, { ...l, day: d, slot: s, dur: l.dur + 1 });
+}
+function shrink(key) {
+  const l = lessons()[key];
+  if (l.dur > 1) { l.dur--; persist(); render(); }
+}
+function toggleDone(key) {
+  const l = lessons()[key];
+  l.status = l.status === 'done' ? 'planned' : 'done';
+  persist(); render();
+}
+
+/* ---------- Çizim ---------- */
+function render() { renderWeekbar(); renderGrid(); renderSummary(); }
+
+function renderWeekbar() {
+  const end = addDays(currentMonday, dayCount() - 1);
+  const sameMonth = currentMonday.getMonth() === end.getMonth();
+  const range = sameMonth
+    ? `${currentMonday.getDate()} – ${end.getDate()} ${MONTHS[end.getMonth()]} ${end.getFullYear()}`
+    : `${shortDate(currentMonday)} – ${shortDate(end)} ${end.getFullYear()}`;
+  const diff = Math.round((currentMonday - mondayOf(new Date())) / (7 * 864e5));
+  const rel = diff === 0 ? 'Bu hafta' : diff === -1 ? 'Geçen hafta' : diff === 1 ? 'Gelecek hafta'
+    : diff < 0 ? `${-diff} hafta önce` : `${diff} hafta sonra`;
+  const t = $('#weekTitle');
+  t.className = 'week-title' + (diff === 0 ? ' is-current' : '');
+  t.innerHTML = `${range}<small>${rel}</small>`;
+  $('#jumpDate').value = dateKey(currentMonday);
+
+  const empty = !Object.keys(lessons()).length;
+  const prev = prevFilledWeek();
+  $('#emptyBanner').hidden = !empty || !prev;
+  if (prev) $('#bannerText').textContent =
+    `Bu haftada henüz ders yok. ${shortDate(keyToDate(prev))} haftasının programını buraya getirebilirsiniz.`;
+}
+
+function renderGrid() {
+  const days = dayCount(), first = firstSlot(), last = lastSlot();
+  const grid = $('#grid');
+  grid.innerHTML = '';
+  grid.style.gridTemplateColumns = `72px repeat(${days}, minmax(120px, 1fr))`;
+  grid.style.gridTemplateRows = `auto repeat(${last - first}, 31px)`;
+  const L = lessons();
+  const rowOf = s => s - first + 2;
+
+  const add = (cls, col, row, html) => {
+    const el = document.createElement('div');
+    el.className = cls; el.style.gridColumn = col; el.style.gridRow = row;
+    if (html != null) el.innerHTML = html;
+    grid.appendChild(el); return el;
+  };
+
+  const todayKey = dateKey(new Date());
+  add('corner', 1, 1, 'Saat');
+  for (let d = 0; d < days; d++) {
+    const date = addDays(currentMonday, d);
+    let count = 0, slots = 0;
+    for (const [k, l] of Object.entries(L)) if (parseKey(k)[0] === d && l.status !== 'cancelled') { count++; slots += l.dur; }
+    const head = add('day-head' + (dateKey(date) === todayKey ? ' today' : ''), d + 2, 1);
+    head.textContent = DAYS[d];
+    head.insertAdjacentHTML('beforeend',
+      `<span class="date">${shortDate(date)}</span><small>${count ? `${count} ders · ${fmtHours(slots)}` : 'boş'}</small>`);
+  }
+  for (let s = first; s < last; s += 2) add('time', 1, `${rowOf(s)} / span 2`, `${fmt(s)}<small>${fmt(s + 1)}</small>`);
+
+  for (let d = 0; d < days; d++) {
+    const dk = dateKey(addDays(currentMonday, d));
+    const extra = dk < todayKey ? ' past' : dk === todayKey ? ' today-col' : '';
+    let coveredUntil = -1;
+    for (let s = first; s < last; s++) {
+      if (s < coveredUntil) continue;
+      const key = `${d}-${s}`, l = L[key];
+      if (l) {
+        const span = Math.min(l.dur, last - s);
+        coveredUntil = s + span;
+        grid.appendChild(lessonEl(key, d, s, l, span, rowOf(s)));
+      } else {
+        const c = add('cell empty' + extra + (s % 2 ? ' half' : ''), d + 2, rowOf(s));
+        c.dataset.day = d; c.dataset.slot = s;
+        c.title = `${DAYS[d]} ${fmt(s)}`;
+      }
+    }
+  }
+}
+
+function lessonEl(key, d, s, l, span, row) {
+  const wrap = document.createElement('div');
+  wrap.className = 'cell lesson-cell' + (s % 2 ? ' half' : '');
+  wrap.style.gridColumn = d + 2;
+  wrap.style.gridRow = `${row} / span ${span}`;
+
+  const status = l.status || 'planned';
+  const [bg, border] = PALETTE[colorIdx(l)];
+  const card = document.createElement('div');
+  card.className = 'lesson' + (span === 1 ? ' short' : '') + (status === 'cancelled' ? ' cancelled' : '') +
+    (highlight && norm(l.name) !== highlight ? ' dim' : '');
+  card.style.backgroundColor = bg; card.style.borderColor = border;
+  card.innerHTML = `
+    <div class="l-name"></div>
+    <div class="l-time"></div>
+    <div class="l-note"></div>
+    <span class="l-status">${STATUS_ICON[status]}</span>
+    <div class="l-tools">
+      <button type="button" data-act="done" title="Yapıldı olarak işaretle / geri al">✓</button>
+      <button type="button" data-act="ext" title="30 dakika uzat">＋</button>
+      ${l.dur > 1 ? '<button type="button" data-act="shr" title="30 dakika kısalt">－</button>' : ''}
+    </div>`;
+  card.querySelector('.l-name').textContent = l.name;
+  const t = card.querySelector('.l-time');
+  t.textContent = `${fmt(s)} – ${fmt(s + l.dur)}`;
+  if (l.dur !== 2) { const b = document.createElement('span'); b.className = 'l-badge'; b.textContent = fmtDur(l.dur); t.appendChild(b); }
+  card.querySelector('.l-note').textContent = l.note || '';
+  card.title = `${l.name}${l.note ? ' – ' + l.note : ''}\n${DAYS[d]} ${shortDate(addDays(currentMonday, d))} ${fmt(s)} – ${fmt(s + l.dur)} (${fmtDur(l.dur)})`;
+
+  card.addEventListener('click', e => {
+    const act = e.target.closest('button')?.dataset.act;
+    if (act === 'ext') extend(key);
+    else if (act === 'shr') shrink(key);
+    else if (act === 'done') toggleDone(key);
+    else openModal(key);
+  });
+  wrap.appendChild(card);
+  return wrap;
+}
+
+function renderSummary() {
+  const map = new Map();
+  let hidden = 0, totalHours = 0, doneHours = 0, cancelled = 0;
+  const entries = Object.entries(lessons()).sort((a, b) => {
+    const [da, ha] = parseKey(a[0]), [db, hb] = parseKey(b[0]);
+    return da - db || ha - hb;
+  });
+  for (const [k, l] of entries) {
+    const n = norm(l.name), st = l.status || 'planned';
+    if (!map.has(n)) map.set(n, { key: n, name: l.name.trim(), count: 0, hours: 0, done: 0, color: colorIdx(l), slots: [] });
+    const s = map.get(n), [d, h] = parseKey(k);
+    if (st === 'cancelled') cancelled++;
+    else { s.count++; s.hours += l.dur; totalHours += l.dur; }
+    if (st === 'done') { s.done += l.dur; doneHours += l.dur; }
+    s.slots.push(`${STATUS_ICON[st] || '🕒'} ${DAYS_SHORT[d]} ${fmt(h)}–${fmt(h + l.dur)}`);
+    if (!isVisible(d, h)) hidden++;
+  }
+  const students = [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+  if (highlight && !map.has(highlight)) highlight = null;
+
+  const aside = $('#summary');
+  aside.innerHTML = `<h2>👩‍🎓 Bu haftanın öğrencileri</h2>
+    <div class="totals">${students.length} öğrenci · ${fmtHours(totalHours)} planlı<br>
+    ✅ ${fmtHours(doneHours)} yapıldı${cancelled ? ` · ❌ ${cancelled} ders iptal` : ''}</div>`;
+  if (!students.length) {
+    aside.insertAdjacentHTML('beforeend', '<p class="empty-msg">Bu haftada ders yok. Programda bir saate tıklayarak başlayın.</p>');
+  } else {
+    const ul = document.createElement('ul'); ul.className = 'students';
+    for (const s of students) {
+      const li = document.createElement('li');
+      if (highlight === s.key) li.classList.add('active');
+      li.title = 'Programda vurgulamak için tıklayın';
+      li.innerHTML = `<div class="s-top"><span class="dot"></span><span class="s-name"></span>
+        <span class="s-count">${fmtHours(s.hours)}${s.done ? ` · ✅${String(s.done / 2).replace('.', ',')}` : ''}</span></div><div class="s-slots"></div>`;
+      const [bg, border] = PALETTE[s.color];
+      li.querySelector('.dot').style.cssText = `background:${bg};border-color:${border}`;
+      li.querySelector('.s-name').textContent = s.name;
+      li.querySelector('.s-slots').innerHTML = s.slots.join('<br>');
+      li.addEventListener('click', () => { highlight = highlight === s.key ? null : s.key; render(); });
+      ul.appendChild(li);
+    }
+    aside.appendChild(ul);
+  }
+  if (hidden) aside.insertAdjacentHTML('beforeend',
+    `<div class="warn">⚠️ ${hidden} ders şu anki saat/gün ayarlarının dışında kaldığı için programda görünmüyor.</div>`);
+
+  // Tüm haftalardaki öğrenci isimleri otomatik tamamlama için
+  const allNames = new Map();
+  for (const w of Object.values(state.weeks)) for (const l of Object.values(w)) allNames.set(norm(l.name), l.name.trim());
+  $('#studentList').innerHTML = '';
+  [...allNames.values()].sort((a, b) => a.localeCompare(b, 'tr')).forEach(n => {
+    const o = document.createElement('option'); o.value = n; $('#studentList').appendChild(o);
+  });
+}
+
+/* ---------- Hafta gezinme ---------- */
+function goWeek(delta) { currentMonday = addDays(currentMonday, delta * 7); highlight = null; render(); }
+$('#btnPrev').addEventListener('click', () => goWeek(-1));
+$('#btnNext').addEventListener('click', () => goWeek(1));
+$('#btnToday').addEventListener('click', () => { currentMonday = mondayOf(new Date()); render(); });
+$('#jumpDate').addEventListener('change', e => {
+  if (e.target.value) { currentMonday = mondayOf(keyToDate(e.target.value)); render(); }
+});
+$('#btnCopyPrev').addEventListener('click', () => {
+  const prev = prevFilledWeek();
+  if (!prev) return;
+  state.weeks[weekKey()] = cloneLessons(state.weeks[prev]);
+  persist(); render();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeModals(); return; }
+  const modalOpen = [...document.querySelectorAll('.overlay')].some(o => !o.hidden);
+  if (modalOpen || ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  if (e.key === 'ArrowLeft') goWeek(-1);
+  if (e.key === 'ArrowRight') goWeek(1);
+});
+
+/* ---------- Sürükleyerek birleştirme ---------- */
+const grid = $('#grid');
+function paintSel() {
+  grid.querySelectorAll('.cell.empty').forEach(c => {
+    const on = sel && +c.dataset.day === sel.day &&
+      +c.dataset.slot >= Math.min(sel.a, sel.b) && +c.dataset.slot <= Math.max(sel.a, sel.b);
+    c.classList.toggle('selecting', !!on);
+  });
+}
+grid.addEventListener('pointerdown', e => {
+  lastDownMouse = e.pointerType === 'mouse';
+  const cell = e.target.closest('.cell.empty');
+  if (!cell || !lastDownMouse || e.button !== 0) return;
+  e.preventDefault();
+  sel = { day: +cell.dataset.day, a: +cell.dataset.slot, b: +cell.dataset.slot, moved: false };
+  paintSel();
+});
+document.addEventListener('pointermove', e => {
+  if (!sel) return;
+  const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('.cell.empty');
+  if (el && +el.dataset.day === sel.day && +el.dataset.slot !== sel.b) {
+    const target = +el.dataset.slot, lo = Math.min(sel.a, target), hi = Math.max(sel.a, target);
+    if (findConflicts(sel.day, lo, hi - lo + 1).length === 0) { sel.b = target; sel.moved = true; paintSel(); }
+  }
+});
+document.addEventListener('pointerup', () => {
+  if (!sel) return;
+  const s = sel; sel = null;
+  const lo = Math.min(s.a, s.b), hi = Math.max(s.a, s.b);
+  // Sürüklemeden tek tıklama → varsayılan 1 saat; sürükleme → seçilen aralık
+  const dur = s.moved ? Math.min(hi - lo + 1, MAX_DUR) : defaultDur(s.day, lo);
+  openModal(null, { day: s.day, slot: lo, dur });
+  paintSel();
+});
+grid.addEventListener('click', e => {
+  if (lastDownMouse) return;
+  const cell = e.target.closest('.cell.empty');
+  if (cell) openModal(null, { day: +cell.dataset.day, slot: +cell.dataset.slot, dur: defaultDur(+cell.dataset.day, +cell.dataset.slot) });
+});
+
+/* ---------- Ders penceresi ---------- */
+const fName = $('#fName'), fNote = $('#fNote'), fDay = $('#fDay'), fHour = $('#fHour'), fDur = $('#fDur');
+
+function openModal(key, preset) {
+  editKey = key;
+  const l = key ? lessons()[key] : null;
+  const [d, s] = key ? parseKey(key) : [preset.day, preset.slot];
+  $('#modalTitle').textContent = key ? 'Dersi Düzenle' : 'Yeni Ders';
+  fName.value = l?.name || '';
+  fNote.value = l?.note || '';
+  fDay.innerHTML = DAYS.slice(0, dayCount())
+    .map((n, i) => `<option value="${i}">${n} (${shortDate(addDays(currentMonday, i))})</option>`).join('');
+  fDay.value = d;
+  let opts = '';
+  for (let i = firstSlot(); i < lastSlot(); i++) opts += `<option value="${i}">${fmt(i)}</option>`;
+  fHour.innerHTML = opts;
+  fHour.value = s;
+  fillDur(l ? l.dur : preset.dur);
+  modalColor = l ? (l.color ?? null) : null;
+  modalStatus = l?.status || 'planned';
+  renderSwatches(); renderStatus();
+  $('#btnDelete').hidden = !key;
+  $('#lessonModal').hidden = false;
+  setTimeout(() => fName.focus(), 0);
+}
+function fillDur(want) {
+  const max = Math.max(1, Math.min(MAX_DUR, lastSlot() - +fHour.value));
+  let opts = '';
+  for (let i = 1; i <= max; i++) opts += `<option value="${i}">${fmtDur(i)}${i > 1 ? ` (${i * 30} dk)` : ''}</option>`;
+  fDur.innerHTML = opts;
+  fDur.value = Math.min(want, max);
+  updateRange();
+}
+function updateRange() {
+  const s = +fHour.value, dur = +fDur.value, d = +fDay.value;
+  $('#fRange').textContent = `🕒 ${DAYS[d]}, ${shortDate(addDays(currentMonday, d))} · ${fmt(s)} – ${fmt(s + dur)}`;
+}
+function renderStatus() {
+  document.querySelectorAll('#fStatus button').forEach(b => b.classList.toggle('on', b.dataset.s === modalStatus));
+}
+document.querySelectorAll('#fStatus button').forEach(b =>
+  b.addEventListener('click', () => { modalStatus = b.dataset.s; renderStatus(); }));
+function renderSwatches() {
+  const box = $('#fColors'); box.innerHTML = '';
+  const autoIdx = hash(norm(fName.value || '')) % PALETTE.length;
+  const mk = (idx, label, value) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'swatch' + (modalColor === value ? ' selected' : '');
+    b.style.background = PALETTE[idx][0]; b.style.borderColor = PALETTE[idx][1];
+    b.textContent = label; b.title = value === null ? 'Otomatik (öğrenciye göre)' : '';
+    b.onclick = () => { modalColor = value; renderSwatches(); };
+    box.appendChild(b);
+  };
+  mk(autoIdx, 'A', null);
+  PALETTE.forEach((_, i) => mk(i, '', i));
+}
+function closeModals() { document.querySelectorAll('.overlay').forEach(o => o.hidden = true); }
+
+fHour.addEventListener('change', () => fillDur(+fDur.value));
+fDur.addEventListener('change', updateRange);
+fDay.addEventListener('change', updateRange);
+fName.addEventListener('input', () => {
+  if (!editKey) {
+    let match = null;
+    for (const w of Object.values(state.weeks)) for (const l of Object.values(w)) if (norm(l.name) === norm(fName.value)) match = l;
+    if (match) { modalColor = match.color ?? null; if (!fNote.value && match.note) fNote.value = match.note; }
+  }
+  renderSwatches();
+});
+$('#lessonForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const name = fName.value.trim();
+  if (!name) return;
+  const ok = saveLesson(editKey, {
+    day: +fDay.value, slot: +fHour.value, dur: +fDur.value,
+    name, note: fNote.value.trim(), color: modalColor, status: modalStatus
+  });
+  if (ok) closeModals();
+});
+$('#btnDelete').addEventListener('click', () => {
+  const L = lessons();
+  if (editKey && confirm(`${L[editKey].name} dersi silinsin mi?`)) {
+    delete L[editKey]; persist(); render(); closeModals();
+  }
+});
+document.querySelectorAll('.cancel').forEach(b => b.addEventListener('click', closeModals));
+document.querySelectorAll('.overlay').forEach(o => o.addEventListener('mousedown', e => { if (e.target === o) closeModals(); }));
+
+/* ---------- Sonraki haftalara kopyala ---------- */
+$('#btnCopyWeeks').addEventListener('click', () => {
+  if (!Object.keys(lessons()).length) { alert('Bu hafta boş; kopyalanacak ders yok.'); return; }
+  $('#copyInfo').textContent = `${shortDate(currentMonday)} haftasındaki ${Object.keys(lessons()).length} ders, sonraki haftalara kopyalanacak (durumlar “Planlandı” olarak sıfırlanır).`;
+  $('#copyModal').hidden = false;
+});
+$('#copyForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const n = Math.max(1, Math.min(52, +$('#cWeeks').value || 1));
+  const overwrite = $('#cOverwrite').checked;
+  let copied = 0, skipped = 0;
+  for (let i = 1; i <= n; i++) {
+    const k = dateKey(addDays(currentMonday, i * 7));
+    if (state.weeks[k] && Object.keys(state.weeks[k]).length && !overwrite) { skipped++; continue; }
+    state.weeks[k] = cloneLessons(lessons()); copied++;
+  }
+  persist(); render(); closeModals();
+  alert(`${copied} haftaya kopyalandı.${skipped ? ` ${skipped} dolu hafta atlandı.` : ''}`);
+});
+
+/* ---------- Ayarlar ---------- */
+$('#btnSettings').addEventListener('click', () => {
+  let s = '', en = '';
+  for (let i = 0; i <= 23; i++) s += `<option value="${i}">${fmt(i * 2)}</option>`;
+  for (let i = 1; i <= 24; i++) en += `<option value="${i}">${fmt(i * 2)}</option>`;
+  $('#sStart').innerHTML = s; $('#sEnd').innerHTML = en;
+  $('#sStart').value = state.settings.start;
+  $('#sEnd').value = state.settings.end;
+  $('#sWeekend').checked = state.settings.weekend;
+  $('#settingsModal').hidden = false;
+});
+$('#settingsForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const start = +$('#sStart').value, end = +$('#sEnd').value;
+  if (end <= start) { alert('Bitiş saati başlangıçtan sonra olmalı.'); return; }
+  state.settings = { start, end, weekend: $('#sWeekend').checked };
+  persist(); render(); closeModals();
+});
+
+/* ---------- Diğer ---------- */
+$('#btnPrint').addEventListener('click', () => window.print());
+$('#btnClear').addEventListener('click', () => {
+  if (confirm('Bu haftadaki tüm dersler silinecek. Emin misiniz?')) {
+    delete state.weeks[weekKey()]; highlight = null; persist(); render();
+  }
+});
+$('#btnExport').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `ders-programi-${dateKey(new Date())}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
+});
+$('#fileImport').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const data = migrate(JSON.parse(r.result));
+      if (!data) throw new Error();
+      if (confirm('Mevcut tüm program yedekteki ile değiştirilsin mi?')) { state = data; persist(); render(); }
+    } catch { alert('Geçersiz yedek dosyası.'); }
+    e.target.value = '';
+  };
+  r.readAsText(file);
+});
+
+render();
+
+// Çevrimdışı çalışma (yalnızca HTTPS veya localhost üzerinde etkinleşir)
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
